@@ -12,17 +12,25 @@ import { enabled } from '../flags.ts';
 import { now, today, OUTBOX_DIR } from '../config.ts';
 import { requireUser } from '../auth.ts';
 import type { Account } from '../types.ts';
-export function assertAvailable(db: DatabaseSync,listingId: string,from: string,to: string) {
+/** Refuses nights that a reservation, a host block or another guest's unexpired hold already keeps. A guest's own hold on exactly this stay is not a conflict. */
+export function assertAvailable(db: DatabaseSync,listingId: string,from: string,to: string,opts:{clock?:string,guestId?:string}={}) {
   const stay=db.prepare("SELECT id FROM bookings WHERE listing_id=? AND status IN ('confirmed','pending','completed') AND from_date<? AND to_date>? LIMIT 1").get(listingId,to,from);
   const block=db.prepare('SELECT id FROM blocks WHERE listing_id=? AND from_date<? AND to_date>? LIMIT 1').get(listingId,to,from);
-  if(stay || block)throw new AppError(409,'DATES_UNAVAILABLE','Those dates are no longer available. Please choose another stay.');
+  const held=db.prepare("SELECT id FROM holds WHERE listing_id=? AND status='active' AND expires_at>? AND from_date<? AND to_date>? AND NOT (guest_id=? AND from_date=? AND to_date=?) LIMIT 1").get(listingId,opts.clock ?? now(),to,from,opts.guestId ?? '',from,to);
+  if(stay || block || held)throw new AppError(409,'DATES_UNAVAILABLE','Those dates are no longer available. Please choose another stay.');
 }
-export function quote(db: DatabaseSync,slug: string,from: string,to: string,guests=2) {
+/** The guest's own unexpired hold on exactly this stay, if any. */
+function ownHold(db: DatabaseSync,guestId: string,listingId: string,from: string,to: string,clock: string):any {
+  return db.prepare("SELECT * FROM holds WHERE guest_id=? AND listing_id=? AND from_date=? AND to_date=? AND status='active' AND expires_at>?").get(guestId,listingId,from,to,clock);
+}
+export function quote(db: DatabaseSync,slug: string,from: string,to: string,guests=2,account?: Account,clock=now()) {
   const home=listingBySlug(db,slug);
   if(!home)throw new AppError(404,'NOT_FOUND','We could not find that home.');
   validateDates(from,to,true);
-  assertAvailable(db,home.id,from,to);
-  return priceStay(home,from,to,guests);
+  assertAvailable(db,home.id,from,to,{clock,guestId:account?.id});
+  const held=account && ownHold(db,account.id,home.id,from,to,clock);
+  integer(guests,'Guests',1,home.sleeps);
+  return held?{...JSON.parse(held.quote),guests}:priceStay(home,from,to,guests);
 }
 export function flushOutbox(db: DatabaseSync,outDir=OUTBOX_DIR) {
   const pending=db.prepare("SELECT * FROM email_outbox WHERE status='pending'").all() as any[];
@@ -39,7 +47,7 @@ function queueConfirmation(db: DatabaseSync,booking:any,title:string) {
   const id=randomUUID();
   db.prepare('INSERT INTO email_outbox (id,booking_id,payload,status,created_at) VALUES (?,?,?,?,?)').run(id,booking.id,JSON.stringify({to:booking.guest_email,subject:`Your ${title} reservation · ${booking.reference}`,reference:booking.reference,home:title,checkIn:booking.from_date,checkOut:booking.to_date,status:booking.status,totalCents:booking.total_cents,currency:'USD',payment:'Demo payment. No money was charged.',createdAt:now()}),'pending',now());
 }
-export function createBooking(db: DatabaseSync,input: any,account: Account | undefined) {
+export function createBooking(db: DatabaseSync,input: any,account: Account | undefined,clock=now()) {
   const user=requireUser(account,'guest');
   const slug=textInput(input.slug,'Home',180), from=textInput(input.from,'Check-in',10),to=textInput(input.to,'Check-out',10);
   validateDates(from,to,true);
@@ -58,11 +66,14 @@ export function createBooking(db: DatabaseSync,input: any,account: Account | und
         return {booking:prior,replayed:true};
       }
     }
-    assertAvailable(db,home.id,from,to);
-    const q=priceStay(home,from,to,guests),id=randomUUID(),reference=`RAP-${id.slice(0,8).toUpperCase()}`;
+    assertAvailable(db,home.id,from,to,{clock,guestId:user.id});
+    // A guest reserving a stay they hold pays the price the hold locked, and the hold becomes the reservation.
+    const held=ownHold(db,user.id,home.id,from,to,clock);
+    const q=held?JSON.parse(held.quote):priceStay(home,from,to,guests),id=randomUUID(),reference=`RAP-${id.slice(0,8).toUpperCase()}`;
     const status=home.instant_book && enabled(db,'instant_booking')?'confirmed':'pending';
     db.prepare(`INSERT INTO bookings (id,reference,listing_id,guest_id,from_date,to_date,guests,guest_name,guest_email,status,nights,accommodation_cents,cleaning_cents,subtotal_cents,service_fee_cents,tax_cents,total_cents,host_payout_cents,policy,payment_status,created_at,idempotency_key) VALUES (${Array(22).fill('?').join(',')})`).run(id,reference,home.id,user.id,from,to,guests,name,email,status,q.nights,q.accommodationCents,q.cleaningCents,q.subtotalCents,q.serviceFeeCents,q.taxCents,q.totalCents,q.hostPayoutCents,home.cancellation_policy,status==='confirmed'?'paid':'authorized',now(),key);
     const booking:any=db.prepare('SELECT * FROM bookings WHERE id=?').get(id);
+    if(held)db.prepare("UPDATE holds SET status='converted',booking_id=? WHERE id=?").run(id,held.id);
     if(status==='confirmed')payout=schedulePayout(db,booking,home.host_id);
     queueConfirmation(db,booking,home.title);
     return {booking,replayed:false};

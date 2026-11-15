@@ -7,6 +7,7 @@
 # Pricing and reservations
 /src/domain/pricing.ts @johnlindquist
 /src/domain/bookings.ts @johnlindquist
+/src/domain/holds.ts @johnlindquist
 /src/domain/cancellation.ts @johnlindquist
 /src/domain/payouts.ts @johnlindquist
 /test/pricing.test.ts @johnlindquist
@@ -25,3 +26,17 @@
 /src/server.ts @johnlindquist
 /src/router.ts @johnlindquist
 /db/ @johnlindquist
+/test/cancellation.test.ts @johnlindquist
+/test/hold-price.test.ts @johnlindquist
+/test/holds.test.ts @johnlindquist
+# Domain agents: a change to an agent's job, memories, glossary or scenario checks is reviewed by the people who own that domain
+/agents/booking/ @johnlindquist
+/agents/pricing/ @johnlindquist
+# The check runner and its workflow
+/bin/agent-checks.mjs @johnlindquist
+/bin/lab-expectations.mjs @johnlindquist
+/.github/workflows/agent-checks.yml @johnlindquist
+# The wake-up that runs an agent when its files are touched
+/extensions/wake-up/ @johnlindquist
+/test/wake-up.test.ts @johnlindquist
+/test/agent-checks.test.ts @johnlindquist

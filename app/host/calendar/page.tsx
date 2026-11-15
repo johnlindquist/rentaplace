@@ -47,7 +47,7 @@ export default async function HostCalendar({ searchParams }: { searchParams: Sea
           <Button asChild variant="outline" size="icon"><Link href={href(next)} aria-label="Next month"><ChevronRight /></Link></Button>
         </div>
       </div>
-      <Legend items={[['available', 'Available'], ['booked', 'Reserved'], ['pending', 'Pending'], ['blocked', 'Blocked']]} />
+      <Legend items={[['available', 'Available'], ['booked', 'Reserved'], ['pending', 'Pending'], ['held', 'Held for 24 hours'], ['blocked', 'Blocked']]} />
       <div className="mt-4"><PortfolioCalendar data={data} formId="block-form" /></div>
 
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">

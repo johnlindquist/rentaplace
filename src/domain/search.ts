@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { decodeListing } from '../db.ts';
-import { addDays, today } from '../config.ts';
+import { addDays, now, today } from '../config.ts';
 import { integer, requireValue } from '../errors.ts';
 import { validateDates } from './pricing.ts';
 import type { Listing, Stay } from '../types.ts';
@@ -30,7 +30,7 @@ export function nearbyListings(homes: Listing[], stays: Stay[], q: SearchQuery):
     for(const stay of stays) {
       if(stay.listing_id!==home.id) continue;
       if(stay.status==='broken') throw new BrokenStayError(stay);
-      if(['confirmed','pending','completed','blocked'].includes(stay.status) && stay.from_date<q.to && q.from<stay.to_date) free=false;
+      if(['confirmed','pending','completed','blocked','held'].includes(stay.status) && stay.from_date<q.to && q.from<stay.to_date) free=false;
     }
     if(free) out.push(home);
   }
@@ -39,13 +39,14 @@ export function nearbyListings(homes: Listing[], stays: Stay[], q: SearchQuery):
   else out.sort((a,b)=>(b.review_count*0.015+b.rating)-(a.review_count*0.015+a.rating) || a.slug.localeCompare(b.slug));
   return out;
 }
-export function loadSearchData(db: DatabaseSync) {
+export function loadSearchData(db: DatabaseSync,clock=now()) {
   const homes=db.prepare('SELECT * FROM listings ORDER BY id').all().map(decodeListing);
   const stays=db.prepare("SELECT id,listing_id,from_date,to_date,status FROM bookings WHERE status <> 'broken'").all().map(row => ({...row})) as Stay[];
   const blocks=db.prepare("SELECT id,listing_id,from_date,to_date,'blocked' as status FROM blocks").all().map(row => ({...row})) as Stay[];
-  return {homes,stays:[...stays,...blocks]};
+  const holds=db.prepare("SELECT id,listing_id,from_date,to_date,'held' as status FROM holds WHERE status='active' AND expires_at>?").all(clock).map(row => ({...row})) as Stay[];
+  return {homes,stays:[...stays,...blocks,...holds]};
 }
-export function search(db: DatabaseSync, q: SearchQuery) {
-  const start=performance.now(), {homes,stays}=loadSearchData(db), all=nearbyListings(homes,stays,q);
+export function search(db: DatabaseSync, q: SearchQuery, clock=now()) {
+  const start=performance.now(), {homes,stays}=loadSearchData(db,clock), all=nearbyListings(homes,stays,q);
   return {items:all.slice((q.page-1)*q.limit,q.page*q.limit),total:all.length,page:q.page,pages:Math.max(1,Math.ceil(all.length/q.limit)),query:q,searchMs:Math.round((performance.now()-start)*100)/100};
 }

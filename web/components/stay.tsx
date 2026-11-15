@@ -86,6 +86,7 @@ const DAY_STYLES: Record<string, string> = {
   booked: 'bg-primary/85 text-primary-foreground',
   blocked: 'bg-muted text-muted-foreground line-through',
   pending: 'bg-pending/60 text-foreground',
+  held: 'bg-pending/30 text-foreground',
 };
 
 export function MonthGrid({ calendar }: { calendar: { month: string; days: { date: string; status: string }[] } }) {

@@ -1,0 +1,50 @@
+name: Agent scenario checks
+# Runs only when a domain agent's folder (or the runner) changes, so every other pull request stays fast.
+on:
+  pull_request:
+    paths:
+      - 'agents/**'
+      - 'bin/agent-checks.mjs'
+      - 'bin/lab-expectations.mjs'
+      - '.github/workflows/agent-checks.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: agent-checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  scenario-checks:
+    # Pull requests from forks get no secrets; skip rather than fail.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      AGENT_MODEL: anthropic/claude-haiku-4-5
+      JUDGE_MODEL: anthropic/claude-sonnet-4-5
+      PI_SKIP_VERSION_CHECK: '1'
+    steps:
+      - name: Check for a model key
+        # No key, no verdict: fail here with the reason rather than pass without asking a model.
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::no model key: set the ANTHROPIC_API_KEY secret (gh secret set ANTHROPIC_API_KEY -R $GITHUB_REPOSITORY)"
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Pi
+        run: npm install --global @earendil-works/pi-coding-agent@1.5.0
+      - name: Run every scenario check three times
+        run: node bin/agent-checks.mjs --all --repeat 3 --json lab-reports/agent-checks.json
+      - name: Save the replies
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-checks
+          path: lab-reports/agent-checks.json

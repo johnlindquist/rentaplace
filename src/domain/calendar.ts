@@ -12,12 +12,13 @@ export function monthDates(month: string): string[] {
   for(let date=month+'-01';date.startsWith(month);date=addDays(date,1))days.push(date);
   return days;
 }
-export function listingCalendar(db: DatabaseSync,home: Listing,month: string,details=false) {
+export function listingCalendar(db: DatabaseSync,home: Listing,month: string,details=false,clock=now()) {
   const booking=db.prepare("SELECT id,reference,status FROM bookings WHERE listing_id=? AND from_date<=? AND to_date>? AND status IN ('confirmed','pending','completed') LIMIT 1");
   const blocked=db.prepare('SELECT id,reason FROM blocks WHERE listing_id=? AND from_date<=? AND to_date>? LIMIT 1');
+  const held=db.prepare("SELECT id FROM holds WHERE listing_id=? AND from_date<=? AND to_date>? AND status='active' AND expires_at>? LIMIT 1");
   const days=monthDates(month).map(date=>{
     const stay:any=booking.get(home.id,date,date), block:any=blocked.get(home.id,date,date);
-    const status=stay?(stay.status==='pending'?'pending':'booked'):block?'blocked':'available';
+    const status=stay?(stay.status==='pending'?'pending':'booked'):block?'blocked':held.get(home.id,date,date,clock)?'held':'available';
     return {date,status,...(details?{bookingId:stay?.id,reference:stay?.reference,blockId:block?.id,reason:block?.reason}: {})};
   });
   return {slug:home.slug,title:home.title,month,days};
@@ -26,7 +27,7 @@ export function hostCalendar(db: DatabaseSync,user: Account | undefined,month: s
   const homes=slug?[ownedListing(db,slug,user)]:hostListings(db,user);
   return {month,days:monthDates(month),listings:homes.map(h=>({...listingCalendar(db,h,month,true),image:h.photos[0]}))};
 }
-export function blockDates(db: DatabaseSync,user: Account | undefined,input: any) {
+export function blockDates(db: DatabaseSync,user: Account | undefined,input: any,clock=now()) {
   const home=ownedListing(db,String(input.slug),user),from=String(input.from),to=String(input.to);
   validateDates(from,to,true);
   const reason=String(input.reason || 'Personal use').trim();
@@ -34,6 +35,7 @@ export function blockDates(db: DatabaseSync,user: Account | undefined,input: any
   return transaction(db,()=>{
     const conflict=db.prepare("SELECT id FROM bookings WHERE listing_id=? AND from_date<? AND to_date>? AND status IN ('confirmed','pending','completed') LIMIT 1").get(home.id,to,from);
     if(conflict)throw new AppError(409,'RESERVATION_CONFLICT','These dates already have a reservation.');
+    if(db.prepare("SELECT id FROM holds WHERE listing_id=? AND from_date<? AND to_date>? AND status='active' AND expires_at>? LIMIT 1").get(home.id,to,from,clock))throw new AppError(409,'HOLD_CONFLICT','A guest is holding these dates. The hold runs out within 24 hours.');
     const id=randomUUID();db.prepare('INSERT INTO blocks VALUES (?,?,?,?,?,?)').run(id,home.id,from,to,reason,now());
     return {id,slug:home.slug,from,to,reason};
   });

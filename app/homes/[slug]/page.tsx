@@ -124,7 +124,7 @@ export default async function HomeDetail({ params, searchParams }: Props) {
                 <Button asChild variant="outline" size="icon-sm"><Link href={monthLink(next)} aria-label="Next month" scroll={false}><ChevronRight /></Link></Button>
               </div>
               <MonthGrid calendar={calendar} />
-              <Legend items={[['available', 'Available'], ['booked', 'Reserved'], ['blocked', 'Blocked'], ['pending', 'Request pending']]} />
+              <Legend items={[['available', 'Available'], ['booked', 'Reserved'], ['blocked', 'Blocked'], ['pending', 'Request pending'], ['held', 'Held for 24 hours']]} />
             </div>
           </section>
 

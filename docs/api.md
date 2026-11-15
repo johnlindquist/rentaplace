@@ -26,6 +26,8 @@ Quotes validate dates, guest count and current availability. Each result include
 
 POST `/api/bookings` accepts `slug`, `from`, `to`, `guests`, `cardNumber`, optional `guestName`, `guestEmail`, and `idempotencyKey`. Use the test number only. A fresh booking returns 201; a matching idempotent retry returns 200. An overlapping reservation returns 409. Requests for homes without instant confirmation remain pending until the owning host responds.
 
+POST `/api/holds` places a 24-hour hold for the signed-in guest. It accepts `slug`, `from`, `to`, optional `guests` and `requestKey`, and takes no card: a hold moves no money. It keeps the nights (no one else can quote, hold or reserve them, and the host cannot block them) and locks the price quoted at that moment; when the same guest reserves the held stay, the reservation is saved at the held price and the hold becomes `converted`. A fresh hold returns 201; the same `requestKey` again returns 200 with the same hold; the same key with a different request returns 409 `REQUEST_CONFLICT`. A guest can hold a given stay once (409 `HOLD_EXISTS`) and can have at most three active holds at a time: the next one returns 409 `HOLD_LIMIT` with a message saying so, and saves nothing. Released, expired and reserved holds do not count. After 24 hours the hold reads `expired` and the nights are free without any further call. GET `/api/holds` and `/api/holds/{id}` are guest-scoped; POST `/api/holds/{id}/release` frees the nights early.
+
 POST `/api/bookings/{id}/cancel` computes the policy refund from the saved price snapshot and adjusts scheduled payouts to the retained host share; full refunds cancel the payout. GET `/api/bookings` and `/api/bookings/{id}` are guest-scoped.
 
 ## Host operations

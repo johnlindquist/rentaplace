@@ -7,7 +7,7 @@ RentAPlace is a single local process. Node's HTTP server dispatches into a small
 | Area | Primary paths | Review responsibility |
 | --- | --- | --- |
 | Discovery | `src/domain/search.ts`, search page functions, `test/search.test.ts`, `test/bench.ts` | Filtering, sort order, availability, pagination, timings |
-| Pricing and reservations | `src/domain/pricing.ts`, `bookings.ts`, `cancellation.ts`, `payouts.ts`, pricing and booking tests | Integer money, checkout transaction, refunds, host share |
+| Pricing and reservations | `src/domain/pricing.ts`, `bookings.ts`, `holds.ts`, `cancellation.ts`, `payouts.ts`, pricing and booking tests | Integer money, checkout transaction, refunds, host share |
 | Host tools | `src/domain/listings.ts`, `calendar.ts`, `host.ts`, `app/host/`, `web/components/portfolio-calendar.tsx`, `test/host.test.ts` | Ownership, editor validation, calendar, reservation response |
 | Support and feedback | `src/domain/support.ts`, `feedback.ts`, operations page, `test/operations.test.ts` | Inbox persistence, page context, feature gates |
 | Platform | `src/server.ts`, `router.ts`, `db.ts`, `auth.ts`, `log.ts`, `flags.ts`, `db/migrations/` | HTTP boundaries, schema, signed sessions, observability |
@@ -19,7 +19,7 @@ CODEOWNERS identifies the repository owner for these paths. A change that crosse
 
 `DatabaseSync` opens `data/rentaplace.db`, enables foreign keys, and applies ordered SQL migrations. The migration ledger stores filenames. Domain operations use prepared statements. Reservation creation, payout scheduling, and the confirmation outbox row commit together under `BEGIN IMMEDIATE`.
 
-Confirmed and pending reservations hold dates. Checkout is exclusive, so a guest can arrive on the previous guest's checkout date. The database owns availability at checkout. A repeated idempotency key returns the existing reservation if the guest, home, dates, and guest count agree.
+Confirmed and pending reservations hold dates. So does an active hold (`src/domain/holds.ts`, table `holds`): a signed-in guest's 24-hour claim on a stay that keeps the nights and the quoted price and has no payment, payout or outbox row. Expiry is a comparison with the clock passed to the function (`expires_at > clock`), so nothing has to run for a hold to lapse, and tests pass a later clock instead of waiting. A guest has at most `MAX_ACTIVE_HOLDS` (3) active holds at once; the count uses the same comparison, so holds that ran out stop counting without anything running. Checkout is exclusive, so a guest can arrive on the previous guest's checkout date. The database owns availability at checkout. A repeated idempotency key returns the existing reservation if the guest, home, dates, and guest count agree.
 
 On cancellation, a full refund cancels the scheduled payout. A partial refund leaves the host share of retained accommodation scheduled, after the platform fee.
 

@@ -40,6 +40,13 @@ pi install --local git:github.com/johnlindquist/herdr-pi-role     # /agent, in t
 
 Run the third line in this folder, then `/reload` in Pi. `/lab doctor` should answer `Lab workspace ready · lab harness ready`. Then ask Main: `Use the lab to run the first check in lab-scenarios.md`. `/lab new critic` and `/lab test critic` need the third line. The lab works on a copy of this project in `~/.lab/rentaplace`; its reports land in `lab-reports/` and `agents/`. `.pi/` and `lab-reports/` are ignored by Git here.
 
+## Domain agents
+
+`agents/booking/` and `agents/pricing/` each hold a small read-only agent for one part of the code: its job (`agent.md`), the paths it owns (`owns.txt`), why things are the way they are (`memories.md`, every line cites a commit, decision, test or card), the few words that matter (`glossary.md`) and its scenario checks (`expectations.md`).
+
+- **Scenario checks.** A plain question and what must come back, asked of the agent on a small model and judged by a second model that has to quote the reply. `node bin/agent-checks.mjs booking` runs one agent, `--all` runs every agent, `--repeat 3` asks each question three times. `/lab test booking` reads the same file, but the lab leaves `agents/` out of its copy of the project, so the agent there has its job without its glossary or memories and most checks fail; use the runner. On GitHub the checks run on any pull request that changes `agents/` (`.github/workflows/agent-checks.yml`); the workflow needs an `ANTHROPIC_API_KEY` repository secret and fails with that message until it has one.
+- **The wake-up.** `extensions/wake-up` is a Pi extension. When Main reads or changes a file an agent owns, that agent is asked once for that file in the conversation, and its short, cited warning is attached to what Main reads next. It never blocks or edits, and says nothing when none of its memories apply. Load it for one run with `pi -e extensions/wake-up`, or for every run in this project with `pi install --local ./extensions/wake-up/index.ts` and `/reload`. It asks `anthropic/claude-haiku-5-5` by default; set `WAKE_MODEL` to change that. What it asked and what came back is appended to `lab-reports/wake-up.jsonl`.
+
 ## Commands
 
 ```sh

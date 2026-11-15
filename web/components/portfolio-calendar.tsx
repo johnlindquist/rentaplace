@@ -13,6 +13,7 @@ const weekday = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateStri
 const BAR: Record<string, string> = {
   booked: 'bg-primary/70',
   pending: 'bg-pending',
+  held: 'bg-pending/50',
   blocked: 'bg-[repeating-linear-gradient(135deg,var(--blocked),var(--blocked)_2px,var(--blocked-soft)_2px,var(--blocked-soft)_5px)]',
   available: '',
 };
