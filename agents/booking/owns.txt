@@ -3,3 +3,4 @@ test/bookings.test.ts
 test/hold-price.test.ts
 src/domain/holds.ts
 test/holds.test.ts
+desk/**

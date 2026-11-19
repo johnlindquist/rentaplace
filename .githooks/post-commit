@@ -1,0 +1,4 @@
+#!/bin/sh
+# After every commit: if the commit changed an agent's files, run that agent's checks. Nobody has to ask.
+# On in this clone only after:  git config core.hooksPath .githooks
+exec node --disable-warning=ExperimentalWarning "$(git rev-parse --show-toplevel)/bin/checks-on-change.mjs"

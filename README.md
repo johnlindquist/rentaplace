@@ -47,6 +47,14 @@ Run the third line in this folder, then `/reload` in Pi. `/lab doctor` should an
 - **Scenario checks.** A plain question and what must come back, asked of the agent on a small model and judged by a second model that has to quote the reply. `node bin/agent-checks.mjs booking` runs one agent, `--all` runs every agent, `--repeat 3` asks each question three times. `/lab test booking` reads the same file, but the lab leaves `agents/` out of its copy of the project, so the agent there has its job without its glossary or memories and most checks fail; use the runner. On GitHub the checks run on any pull request that changes `agents/` (`.github/workflows/agent-checks.yml`); the workflow needs an `ANTHROPIC_API_KEY` repository secret and fails with that message until it has one.
 - **The wake-up.** `extensions/wake-up` is a Pi extension. When Main reads or changes a file an agent owns, that agent is asked once for that file in the conversation, and its short, cited warning is attached to what Main reads next. It never blocks or edits, and says nothing when none of its memories apply. Load it for one run with `pi -e extensions/wake-up`, or for every run in this project with `pi install --local ./extensions/wake-up/index.ts` and `/reload`. It asks `anthropic/claude-haiku-5-5` by default; set `WAKE_MODEL` to change that. What it asked and what came back is appended to `lab-reports/wake-up.jsonl`.
 
+## The front desk
+
+RentAPlace can be used by other people's agents. A plain-text guide at `/llms.txt`, typed tools over MCP at `POST /mcp` (price, house rules, a no-money hold), and a small conversational desk at `POST /desk` for questions. Limits on message size, visits per minute and daily spend are checked in code before any model runs, every visit leaves a receipt, and a confirmation always comes from the saved record. No route lets an agent pay, reserve, refund or cancel.
+
+Changes to the agents are guarded by sealed cases (held-out checks kept outside the project), hooks that run them when an agent or its guarded code changes, and a Trainer whose drafts go live only with two keys: the checks passed, and a person approved, the exact same version.
+
+[`docs/front-desk.md`](docs/front-desk.md) has the settings, the commands and what is still needed before real visitors.
+
 ## Commands
 
 ```sh

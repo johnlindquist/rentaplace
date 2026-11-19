@@ -1,0 +1,3 @@
+#!/bin/sh
+# After a pull or merge: run the checks of every agent whose files the merge brought in. Nobody has to ask.
+exec node --disable-warning=ExperimentalWarning "$(git rev-parse --show-toplevel)/bin/checks-on-change.mjs" --since ORIG_HEAD

@@ -30,6 +30,12 @@ POST `/api/holds` places a 24-hour hold for the signed-in guest. It accepts `slu
 
 POST `/api/bookings/{id}/cancel` computes the policy refund from the saved price snapshot and adjusts scheduled payouts to the retained host share; full refunds cancel the payout. GET `/api/bookings` and `/api/bookings/{id}` are guest-scoped.
 
+## House rules
+
+`GET /api/listings/{slug}/house-rules` returns the reviewed public rules for one active home. Use `?topic=quiet+hours` (case-insensitive exact heading) to select one section. Each passage includes the home slug, document revision, heading, verbatim text and a source address relative to the site origin. Open `source` on this site to see that passage. The response also includes the listing title and published amenities; an amenity is not a house rule.
+
+`NO_HOUSE_RULES` means this home has no rules document; `TOPIC_NOT_FOUND` means there is no passage answering that topic. Both return empty passages. An unknown or non-public home returns JSON 404 `HOME_NOT_FOUND`.
+
 ## Host operations
 
 - GET `/api/host/dashboard`, `/api/host/listings`, `/api/host/reservations`, `/api/host/payouts`.

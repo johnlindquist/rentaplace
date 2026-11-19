@@ -5,6 +5,9 @@
 //   node bin/agent-checks.mjs --all              every agents/*/expectations.md
 //   node bin/agent-checks.mjs --changed BASE     only agents whose folder differs from git ref BASE
 //   options: --repeat N  --agent-model provider/id  --judge-model provider/id  --json FILE  --verbose
+//            --cases FILE   run the checks in FILE (same form) instead of agents/<agent>/expectations.md
+//            --sealed       with --cases: print only a pass count per numbered case, never its title, question or reply
+//            --project DIR  read agents/<agent>/ from DIR (a candidate copy) instead of this project
 //
 // Each "## Title" in agents/<agent>/expectations.md is one scenario check, in the lab's own form:
 //   Do: the plain question · Expect: what must come back · Never: what must not ·
@@ -19,17 +22,19 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { parse, job, contains, quoted, steps, judged, observed } from './lab-expectations.mjs';
+import { SMALL_MODEL, JUDGE_MODEL as DEFAULT_JUDGE } from '../models.mjs';
 
 const args = process.argv.slice(2);
 const flag = (name, fallback) => { const i = args.indexOf(`--${name}`); if (i < 0) return fallback; const v = args[i + 1]; args.splice(i, 2); return v; };
 const bool = name => { const i = args.indexOf(`--${name}`); if (i < 0) return false; args.splice(i, 1); return true; };
 const root = path.resolve(flag('project', process.cwd()));
-const AGENT_MODEL = flag('agent-model', process.env.AGENT_MODEL || 'anthropic/claude-haiku-4-5');
-const JUDGE_MODEL = flag('judge-model', process.env.JUDGE_MODEL || 'anthropic/claude-sonnet-4-5');
+const AGENT_MODEL = flag('agent-model', process.env.AGENT_MODEL || SMALL_MODEL);
+const JUDGE_MODEL = flag('judge-model', process.env.JUDGE_MODEL || DEFAULT_JUDGE);
 const REPEAT = Number(flag('repeat', '1'));
 const JSON_OUT = flag('json');
 const CHANGED = flag('changed');
-const ALL = bool('all'), VERBOSE = bool('verbose');
+const CASES = flag('cases');
+const ALL = bool('all'), VERBOSE = bool('verbose'), SEALED = bool('sealed');
 const PI = process.env.PI_BIN || 'pi';
 const PARALLEL = Number(process.env.AGENT_CHECKS_PARALLEL || 4);
 let spent = 0;
@@ -128,30 +133,33 @@ async function pool(jobs, size) {
 
 try {
   const names = agentNames();
+  if (SEALED && !CASES) throw Error('--sealed needs --cases FILE');
+  if (CASES && names.length !== 1) throw Error('--cases FILE checks one named agent');
   if (!names.length) { console.log(CHANGED ? `No agent folder changed since ${CHANGED}. Nothing to check.` : 'Name an agent, or use --all.'); process.exit(CHANGED ? 0 : 2); }
   const jobs = [];
   for (const name of names) {
-    const spec = parse(fs.readFileSync(path.join(root, 'agents', name, 'expectations.md'), 'utf8'), name);
+    const spec = parse(fs.readFileSync(CASES ? path.resolve(CASES) : path.join(root, 'agents', name, 'expectations.md'), 'utf8'), name);
     const system = systemPrompt(name);
     for (const item of spec.items) for (let r = 1; r <= REPEAT; r++) jobs.push(() => runCheck(name, system, item, r));
   }
-  console.log(`Scenario checks · agent on ${AGENT_MODEL} · judge ${JUDGE_MODEL} · ${jobs.length} run${jobs.length === 1 ? '' : 's'}`);
+  console.log(`${SEALED ? 'Sealed cases' : 'Scenario checks'} · agent on ${AGENT_MODEL} · judge ${JUDGE_MODEL} · ${jobs.length} run${jobs.length === 1 ? '' : 's'}`);
   const results = await pool(jobs, PARALLEL);
   const groups = new Map();
   for (const r of results) { const k = `${r.agent} · ${r.check}`; groups.set(k, [...(groups.get(k) || []), r]); }
-  let failed = 0;
+  let failed = 0, n = 0;
   for (const [k, rs] of groups) {
     const passes = rs.filter(r => r.ok).length;
     if (passes < rs.length) failed++;
-    console.log(`${passes === rs.length ? '✓' : '✗'} ${k}${REPEAT > 1 ? ` · ${passes} of ${rs.length} passed` : ''}`);
+    n++;
+    console.log(`${passes === rs.length ? '✓' : '✗'} ${SEALED ? `${rs[0].agent} · sealed case ${n}` : k}${REPEAT > 1 || SEALED ? ` · ${passes} of ${rs.length} passed` : ''}`);
     const show = rs.find(r => !r.ok) || rs[0];
-    if (!show.ok || VERBOSE) {
+    if (!SEALED && (!show.ok || VERBOSE)) {
       console.log(`    asked: ${show.question}`);
       console.log(`    got:   ${show.reply.replace(/\s+/g, ' ').slice(0, 400)}`);
       for (const l of show.lines) console.log(`    ${l.ok ? '✓' : '✗'} ${l.kind}: ${l.text}${l.quote ? ` — "${l.quote}"` : ''}${l.error ? ` (${l.error})` : ''}`);
     }
   }
-  console.log(`${failed ? `${failed} of ${groups.size} checks failed` : `all ${groups.size} checks passed`} · model cost about $${spent.toFixed(4)} (Pi's estimate)`);
-  if (JSON_OUT) { fs.mkdirSync(path.dirname(path.resolve(JSON_OUT)), { recursive: true }); fs.writeFileSync(JSON_OUT, JSON.stringify({ agentModel: AGENT_MODEL, judgeModel: JUDGE_MODEL, repeat: REPEAT, cost: spent, results }, null, 2)); }
+  console.log(`${failed ? `${failed} of ${groups.size} ${SEALED ? 'sealed cases' : 'checks'} failed` : `all ${groups.size} ${SEALED ? 'sealed cases' : 'checks'} passed`} · model cost about $${spent.toFixed(4)} (Pi's estimate)`);
+  if (JSON_OUT) { fs.mkdirSync(path.dirname(path.resolve(JSON_OUT)), { recursive: true }); fs.writeFileSync(JSON_OUT, JSON.stringify({ agentModel: AGENT_MODEL, judgeModel: JUDGE_MODEL, repeat: REPEAT, cost: spent, sealed: SEALED, cases: groups.size, failed, counts: [...groups.values()].map(rs => ({ passed: rs.filter(r => r.ok).length, of: rs.length })), results }, null, 2)); }
   process.exit(failed ? 1 : 0);
 } catch (e) { console.error(`agent-checks: ${e.message}`); process.exit(2); }

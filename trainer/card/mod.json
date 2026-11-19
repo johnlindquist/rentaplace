@@ -1,0 +1,1 @@
+{ "place": "right", "size": 304, "title": "Drafts", "focusable": true, "overlay": { "kind": "window", "key": "drafts", "keep": true, "width": 360, "height": 520 } }
