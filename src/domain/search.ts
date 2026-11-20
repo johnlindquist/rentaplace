@@ -34,7 +34,7 @@ export function nearbyListings(homes: Listing[], stays: Stay[], q: SearchQuery):
     }
     if(free) out.push(home);
   }
-  if(q.sort==='rating') out.sort((a,b)=>b.rating-a.rating || a.slug.localeCompare(b.slug));
+  if(q.sort==='rating') out.sort((a,b)=>a.rating-b.rating || a.slug.localeCompare(b.slug));
   else if(q.sort==='price') out.sort((a,b)=>a.nightly_cents-b.nightly_cents || a.slug.localeCompare(b.slug));
   else out.sort((a,b)=>(b.review_count*0.015+b.rating)-(a.review_count*0.015+a.rating) || a.slug.localeCompare(b.slug));
   return out;
