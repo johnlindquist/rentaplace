@@ -1,3 +1,4 @@
+import { calendarDayName } from './weekdays.ts';
 import { addDays, daysBetween, today } from '../config.ts';
 import { requireValue, integer } from '../errors.ts';
 import type { Listing, Quote } from '../types.ts';
@@ -12,8 +13,8 @@ export function validateDates(from: string, to: string, future = false): number 
   return nights;
 }
 export function isWeekend(date: string): boolean {
-  const day = new Date(`${date}T00:00:00Z`).getUTCDay();
-  return day === 5 || day === 6;
+  const day = calendarDayName(date);
+  return day === 'Fri' || day === 'Sat';
 }
 export function priceStay(home: Pick<Listing, 'slug' | 'sleeps' | 'nightly_cents' | 'weekend_cents' | 'cleaning_cents'>, from: string, to: string, guests = 2): Quote {
   const nights = validateDates(from, to);
